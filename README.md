@@ -2,3 +2,6 @@
 CS443: Bio-inspired Machine Learning
 2026 Spring
 Colby College
+
+
+with professor Oliver Layton
