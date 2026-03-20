@@ -5,3 +5,5 @@ Colby College
 
 
 with professor Oliver Layton
+
+course website: https://cs.colby.edu/courses/S26/cs443/index.html
