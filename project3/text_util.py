@@ -81,11 +81,17 @@ def get_most_similar_words(k, word_str, all_embeddings, word_str2int, eps=1e-10)
     -
     '''
 
-    word_str = word_str.lower()
+    if word_str not in word_str2int:
+        word_str = word_str.lower()
     if word_str not in word_str2int:
         raise KeyError(f"'{word_str}' not in vocab. Pick a different word.")
     word_idx = word_str2int[word_str]
 
+    if word_idx >= len(all_embeddings):
+        raise IndexError(
+            f"Word '{word_str}' has index {word_idx} but embeddings only have {len(all_embeddings)} rows. "
+            f"Re-export embeddings from word_embeddings.ipynb (save_embeddings() after training)."
+        )
     query_embedding = all_embeddings[word_idx]
 
     all_embeddings_tf = tf.convert_to_tensor(all_embeddings, dtype=tf.float32)
