@@ -180,9 +180,10 @@ class SOM:
         float.
             The decayed parameter.
         '''
-        # Exponential decay: initial * (final/initial)^(t/T)
-        ratio = final_val / initial_val
-        decayed = initial_val * (ratio ** (curr_iter / num_iters))
+        tau = -(num_iters - 1) / np.log(initial_val / final_val)
+
+        decayed = initial_val * np.exp(-curr_iter / tau)
+
         return decayed
 
     def fit(self, x, epochs, lr_initial=0.2, lr_final=0.01, sigma_initial=0.2, sigma_final=0.01, print_every=1,
@@ -286,4 +287,30 @@ class SOM:
         - Loops are fine here.
 
         '''
-        pass
+        u_mat = np.zeros((self.n_rows, self.n_cols))
+
+        for r in range(self.n_rows):
+            for c in range(self.n_cols):
+                wt = self.wts[r, c]
+
+                total_dist = 0.0
+
+                for dr in [-1, 0, 1]:
+                    for dc in [-1, 0, 1]:
+                        if dr == 0 and dc == 0:
+                            continue
+
+                        nr = r + dr
+                        nc = c + dc
+
+                        if 0 <= nr < self.n_rows and 0 <= nc < self.n_cols:
+                            neighbor_wt = self.wts[nr, nc]
+                            total_dist += np.linalg.norm(wt - neighbor_wt)
+
+                u_mat[r, c] = total_dist
+
+        max_val = np.max(u_mat)
+        if max_val > 0:
+            u_mat = u_mat / max_val
+
+        return u_mat
