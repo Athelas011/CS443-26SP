@@ -180,11 +180,11 @@ class SOM:
         float.
             The decayed parameter.
         '''
-        tau = -(num_iters - 1) / np.log(initial_val / final_val)
 
+        tau = -(num_iters - 1) / np.log(final_val / initial_val)
         decayed = initial_val * np.exp(-curr_iter / tau)
-
         return decayed
+  
 
     def fit(self, x, epochs, lr_initial=0.2, lr_final=0.01, sigma_initial=0.2, sigma_final=0.01, print_every=1,
             seed=0, verbose=True):
