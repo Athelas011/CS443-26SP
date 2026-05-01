@@ -181,8 +181,8 @@ class SOM:
             The decayed parameter.
         '''
 
-        tau = -(num_iters - 1) / np.log(final_val / initial_val)
-        decayed = initial_val * np.exp(-curr_iter / tau)
+        tau = -(num_iters - 1) / np.log(initial_val / final_val)
+        decayed = initial_val * np.exp(-(curr_iter+1) / tau)
         return decayed
   
 
