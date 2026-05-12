@@ -494,7 +494,33 @@ class GRU_RNN2(RNN):
         1. Call the superclass constructor to pass along parameters that `DeepNetwork` has in common.
         2. Build out the network like usual. NOTE: you should populate the self.is_recurrent_layer list.
         '''
-        pass
+        super().__init__(input_feats_shape, C)
+
+        # Embedding
+        self.embedding_layer = Embedding(name='embedding', units=embedding_dim, prev_layer_or_block=None)
+        self.is_recurrent_layer.append(False)
+
+        # GRU 1
+        self.gru1 = GRU(name='gru1', units=rnn_units[0], prev_layer_or_block=self.embedding_layer)
+        self.is_recurrent_layer.append(True)
+
+        # Dropout 1
+        self.dropout1 = Dropout(name='dropout1', rate=dropout_rates[0], prev_layer_or_block=self.gru1)
+        self.is_recurrent_layer.append(False)
+
+        # GRU 2
+        self.gru2 = GRU(name='gru2', units=rnn_units[1], prev_layer_or_block=self.dropout1)
+        self.is_recurrent_layer.append(True)
+
+        # Dropout 2
+        self.dropout2 = Dropout(name='dropout2', rate=dropout_rates[1], prev_layer_or_block=self.gru2)
+        self.is_recurrent_layer.append(False)
+
+        # Dense output
+        self.dense_layer = Dense(name='dense', units=C, activation='softmax', prev_layer_or_block=self.dropout2)
+        self.is_recurrent_layer.append(False)
+
+        self.output_layer = self.dense_layer
 
 
 class GRU_RNN2XL(GRU_RNN2):
@@ -526,7 +552,8 @@ class GRU_RNN2XL(GRU_RNN2):
         NOTE: This has the same architecture as GRU_RNN2 (only number of units / parameters different) so you can build
         this with one line of code :)
         '''
-        pass
+        super().__init__(input_feats_shape, C, embedding_dim=embedding_dim,
+                         rnn_units=rnn_units, dropout_rates=dropout_rates)
 
 
 class GRU_RNN3(RNN):
@@ -559,4 +586,38 @@ class GRU_RNN3(RNN):
         1. Call the superclass constructor to pass along parameters that `DeepNetwork` has in common.
         2. Build out the network like usual. NOTE: you should populate the self.is_recurrent_layer list.
         '''
-        pass
+        super().__init__(input_feats_shape, C)
+
+        # Embedding
+        self.embedding_layer = Embedding(name='embedding', units=embedding_dim, prev_layer_or_block=None)
+        self.is_recurrent_layer.append(False)
+
+        # GRU 1
+        self.gru1 = GRU(name='gru1', units=rnn_units[0], prev_layer_or_block=self.embedding_layer)
+        self.is_recurrent_layer.append(True)
+
+        # Dropout 1
+        self.dropout1 = Dropout(name='dropout1', rate=dropout_rates[0], prev_layer_or_block=self.gru1)
+        self.is_recurrent_layer.append(False)
+
+        # GRU 2
+        self.gru2 = GRU(name='gru2', units=rnn_units[1], prev_layer_or_block=self.dropout1)
+        self.is_recurrent_layer.append(True)
+
+        # Dropout 2
+        self.dropout2 = Dropout(name='dropout2', rate=dropout_rates[1], prev_layer_or_block=self.gru2)
+        self.is_recurrent_layer.append(False)
+
+        # GRU 3
+        self.gru3 = GRU(name='gru3', units=rnn_units[2], prev_layer_or_block=self.dropout2)
+        self.is_recurrent_layer.append(True)
+
+        # Dropout 3
+        self.dropout3 = Dropout(name='dropout3', rate=dropout_rates[2], prev_layer_or_block=self.gru3)
+        self.is_recurrent_layer.append(False)
+
+        # Dense output
+        self.dense_layer = Dense(name='dense', units=C, activation='softmax', prev_layer_or_block=self.dropout3)
+        self.is_recurrent_layer.append(False)
+
+        self.output_layer = self.dense_layer
