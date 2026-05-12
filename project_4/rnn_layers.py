@@ -301,40 +301,37 @@ class GRU(layers.Layer):
         set it to the shape of the layer's 3D activations, represented as a Python list. You can convert something into
         a Python list by calling the `list` function — e.g. `list(blah)`.
         '''
-        B, T, H_prev = x.shape
-        H = self.units
+        B = tf.shape(x)[0]
+        T = tf.shape(x)[1]
 
-        # 1. Initialize the state if none is provided
         if state is None:
             state = self.reset_state(B)
 
-        # This list will store the state (hidden act) for each time step
-        state_history = []
+        # TensorArray accumulates one (B, H) state per time step.
+        # Using tf.while_loop keeps the graph to a single loop node instead of
+        # unrolling T=256 copies of every GRU op, which would OOM and take
+        # minutes to compile.
+        state_ta = tf.TensorArray(dtype=tf.float32, size=T, dynamic_size=False,
+                                  element_shape=[None, self.units])
 
-        # 2. "Unroll" the GRU: Loop through each time step
-        for t in range(T):
-            # Current time step input and mask
-            x_t = x[:, t, :]          # Shape: (B, H_prev)
-            mask_t = mask[:, t, :]    # Shape: (B, 1)
-
-            # Compute net input and activations for current step
-            # Note: We use the 'state' from the previous iteration
+        def body(t, state, ta):
+            x_t = x[:, t, :]
+            mask_t = mask[:, t, :]
             z_in, r_in, c_in = self.compute_net_input(x_t, state)
-            new_state, z_act, r_act = self.compute_net_activation(z_in, r_in, c_in, state)
-
-            # 3. Apply the Mask
-            # If mask is 1: use new_state. If mask is 0: stay with previous state.
+            new_state, _, _ = self.compute_net_activation(z_in, r_in, c_in, state)
             state = mask_t * new_state + (1.0 - mask_t) * state
+            return t + 1, state, ta.write(t, state)
 
-            # Record the state for this time step
-            state_history.append(state)
+        _, _, state_ta = tf.while_loop(
+            lambda t, state, ta: t < T,
+            body,
+            [tf.constant(0), state, state_ta],
+            parallel_iterations=1,   # RNN steps are inherently sequential
+        )
 
-        # 4. Aggregate the history into a 3D tensor (B, T, H)
-        # tf.stack turns a list of T tensors of shape (B, H) into one (T, B, H)
-        # then we transpose to get (B, T, H)
-        all_states = tf.stack(state_history, axis=1)
+        # state_ta.stack() → (T, B, H); transpose → (B, T, H)
+        all_states = tf.transpose(state_ta.stack(), perm=[1, 0, 2])
 
-        # 5. Set output_shape if this is the first pass
         if self.output_shape is None:
             self.output_shape = list(all_states.shape)
 
