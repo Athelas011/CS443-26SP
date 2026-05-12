@@ -98,7 +98,7 @@ class Layer:
 
         HINT: Check out the instance variables above...
         '''
-        return bool(self.is_training.numpy())
+        return self.is_training
 
     def set_mode(self, is_training):
         '''Informs the layer whether the neural network is currently training. Used in Dropout and some other layer
@@ -461,12 +461,9 @@ class Dropout(Layer):
         axes when working with shapes. For example, blah.shape[2] is considered hard coding because blah may not always
         have an axis 2.
         '''
-        if self.get_mode():
-            # Trainable mode
-            keep_prob = 1.0 - self.rate
-            return tf.nn.dropout(x, rate=self.rate)
-        else:
-            return x
+        return tf.cond(self.get_mode(),
+                       lambda: tf.nn.dropout(x, rate=self.rate),
+                       lambda: x)
 
     def __str__(self):
         '''This layer's "ToString" method. Feel free to customize if you want to make the layer description fancy,
