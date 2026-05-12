@@ -301,37 +301,25 @@ class GRU(layers.Layer):
         set it to the shape of the layer's 3D activations, represented as a Python list. You can convert something into
         a Python list by calling the `list` function — e.g. `list(blah)`.
         '''
-        B, T, H_prev = x.shape  # static shapes — required for XLA
+        B, T, H_prev = x.shape  # static shapes — T is a Python int, required for XLA
         H = self.units
 
         if state is None:
             state = self.reset_state(B)
 
-        # tf.while_loop keeps the graph to a single loop node instead of
-        # unrolling T copies of every GRU op (which OOMs and takes minutes
-        # to compile). Both size= and maximum_iterations= must be the static
-        # Python int T so XLA knows the tensor list length at compile time.
-        state_ta = tf.TensorArray(dtype=tf.float32, size=T, dynamic_size=False,
-                                  element_shape=[None, H])
-
-        def body(t, state, ta):
+        # Python for-loop with a static T: at trace time jit_compile=True unrolls
+        # this into T fully-static op copies, so XLA knows every tensor size and
+        # can compile without a dynamic gradient accumulator.
+        state_history = []
+        for t in range(T):
             x_t    = x[:, t, :]
             mask_t = mask[:, t, :]
             z_in, r_in, c_in = self.compute_net_input(x_t, state)
-            new_state, _, _ = self.compute_net_activation(z_in, r_in, c_in, state)
+            new_state, z_act, r_act = self.compute_net_activation(z_in, r_in, c_in, state)
             state = mask_t * new_state + (1.0 - mask_t) * state
-            return t + 1, state, ta.write(t, state)
+            state_history.append(state)
 
-        _, _, state_ta = tf.while_loop(
-            lambda t, state, ta: t < T,
-            body,
-            [tf.constant(0), state, state_ta],
-            parallel_iterations=1,     # sequential — each step needs previous state
-            maximum_iterations=T,      # static bound required by XLA
-        )
-
-        # state_ta.stack() → (T, B, H); transpose → (B, T, H)
-        all_states = tf.transpose(state_ta.stack(), perm=[1, 0, 2])
+        all_states = tf.stack(state_history, axis=1)  # (B, T, H)
 
         if self.output_shape is None:
             self.output_shape = list(all_states.shape)
