@@ -301,30 +301,29 @@ class GRU(layers.Layer):
         set it to the shape of the layer's 3D activations, represented as a Python list. You can convert something into
         a Python list by calling the `list` function — e.g. `list(blah)`.
         '''
-        B, T, H_prev = x.shape  # static Python ints — required for XLA
+        _, T, _ = x.shape  # T must be a static Python int for XLA (fixed-length padded seqs)
         H = self.units
 
+        # Use tf.shape for the dynamic batch dimension so reset_state works even
+        # when the static batch size is None (e.g. last partial batch).
         if state is None:
-            state = self.reset_state(B)
+            state = self.reset_state(tf.shape(x)[0])
 
-        # tf.scan is the XLA-compatible way to run the GRU over time.
-        # A Python for-loop + list accumulation causes TF's gradient engine to
-        # build an unbounded internal while loop for the backward pass, which
-        # XLA rejects with "fixed tensor list size" errors. tf.scan is a
-        # first-class differentiable op whose gradient is a reverse scan with
-        # the same statically-known iteration count — XLA can compile it cleanly.
-        x_seq    = tf.transpose(x,    perm=[1, 0, 2])  # (T, B, H_prev)
-        mask_seq = tf.transpose(mask, perm=[1, 0, 2])  # (T, B, 1)
+        # Python for-loop → TF statically unrolls into T separate op copies at
+        # trace time.  No tf.while_loop is ever created, so the backward pass
+        # is also a plain sequence of ops — XLA compiles this without needing a
+        # fixed tensor-list size and the gradient_tape/while/while/accumulator
+        # error never appears.
+        all_states_list = []
+        for t in range(T):
+            x_t    = x[:, t, :]     # (B, H_prev)
+            mask_t = mask[:, t, :]  # (B, 1)
+            z_in, r_in, c_in = self.compute_net_input(x_t, state)
+            new_state, _, _ = self.compute_net_activation(z_in, r_in, c_in, state)
+            state = mask_t * new_state + (1.0 - mask_t) * state
+            all_states_list.append(state)
 
-        def gru_step(prev_state, inputs):
-            x_t, mask_t = inputs
-            z_in, r_in, c_in = self.compute_net_input(x_t, prev_state)
-            new_state, _, _ = self.compute_net_activation(z_in, r_in, c_in, prev_state)
-            return mask_t * new_state + (1.0 - mask_t) * prev_state
-
-        # Returns (T, B, H) — one state per time step
-        all_states = tf.scan(gru_step, (x_seq, mask_seq), initializer=state)
-        all_states = tf.transpose(all_states, perm=[1, 0, 2])  # (B, T, H)
+        all_states = tf.stack(all_states_list, axis=1)  # (B, T, H)
 
         if self.output_shape is None:
             self.output_shape = list(all_states.shape)
