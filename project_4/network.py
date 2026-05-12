@@ -7,6 +7,7 @@ import os
 import time
 import numpy as np
 import tensorflow as tf
+from tqdm.auto import tqdm
 
 from tf_util import arange_index
 
@@ -448,26 +449,33 @@ class DeepNetwork:
                 if 'current_lr' in meta:
                     self.opt.learning_rate = float(meta['current_lr'])
                 self.load_wts(path=checkpoint_dir, filename='checkpoint_weights.npz')
-                if verbose:
-                    print(f'Resumed from checkpoint at epoch {start_epoch}/{max_epochs}')
+                print(f'[Checkpoint] Resuming from epoch {start_epoch}/{max_epochs} '
+                      f'(lr={float(self.opt.learning_rate):.2e}, lr_decays={lr_decays})')
+            else:
+                print(f'[Checkpoint] No checkpoint found in "{checkpoint_dir}" — starting fresh.')
+        else:
+            print('[Checkpoint] Checkpointing disabled — starting fresh.')
 
         for epoch in range(start_epoch, max_epochs):
             start_time = time.time()
             e = epoch + 1
             epoch_loss = 0.0
 
-            for b in range(num_batches):
-                indices = rng.integers(low=0, high=N, size=batch_size)
-                x_batch = tf.gather(x, indices)
-                y_batch = tf.gather(y, indices)
-                batch_loss = self.train_step(x_batch, y_batch)
-                epoch_loss += float(batch_loss)
+            with tqdm(total=num_batches, desc=f'Epoch {e}/{max_epochs}', unit='batch', leave=False) as pbar:
+                for b in range(num_batches):
+                    indices = rng.integers(low=0, high=N, size=batch_size)
+                    x_batch = tf.gather(x, indices)
+                    y_batch = tf.gather(y, indices)
+                    batch_loss = self.train_step(x_batch, y_batch)
+                    epoch_loss += float(batch_loss)
+                    pbar.set_postfix(loss=f'{float(batch_loss):.4f}')
+                    pbar.update(1)
 
             epoch_loss /= num_batches
             train_loss_hist.append(epoch_loss)
 
             elapsed_time = time.time() - start_time
-            
+
             if e % val_every == 0 and x_val is not None:
                 val_acc, val_loss = self.evaluate(x_val, y_val)
                 self.set_layer_training_mode(is_training=True)
@@ -475,13 +483,13 @@ class DeepNetwork:
                 val_acc_hist.append(val_acc)
 
                 if verbose:
-                    print(f'Epoch {e}/{max_epochs} | Time : {elapsed_time:.2f} s | train_loss: {epoch_loss:.4f} | val_loss: {val_loss:.4f} | val_acc: {val_acc:.4f}')
+                    print(f'Epoch {e}/{max_epochs} | Time: {elapsed_time:.2f}s | train_loss: {epoch_loss:.4f} | val_loss: {val_loss:.4f} | val_acc: {val_acc:.4f}')
 
                 # early stopping
                 rencent_val_losses, stop = self.early_stopping(rencent_val_losses, val_loss, patience)
                 if stop:
                     if verbose:
-                        print(f'\nEarly stopping triggered. Stopping training.')
+                        print('Early stopping triggered.')
                     break
 
                 # lr decay
@@ -491,10 +499,10 @@ class DeepNetwork:
                         self.lr_step_decay(lr_decay_factor)
                         lr_decays += 1
                         if verbose:
-                            print(f' | LR decayed. Total decays: {lr_decays}', end='')
+                            print(f'  LR decayed. Total decays: {lr_decays}')
 
-            if verbose:
-                print()
+            elif verbose:
+                print(f'Epoch {e}/{max_epochs} | Time: {elapsed_time:.2f}s | train_loss: {epoch_loss:.4f}')
 
             # Periodic checkpoint save
             if checkpoint_dir is not None and e % checkpoint_every == 0:
@@ -508,6 +516,8 @@ class DeepNetwork:
                          recent_val_losses_lr=recent_val_losses_lr,
                          lr_decays=lr_decays,
                          current_lr=float(self.opt.learning_rate))
+                if verbose:
+                    print(f'  [Checkpoint] Saved at epoch {e} → {checkpoint_dir}/')
 
 
 
