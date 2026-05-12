@@ -209,7 +209,7 @@ class RNN(network.DeepNetwork):
 
        
 
-    @tf.function(jit_compile=True)
+    @tf.function
     def train_step(self, x_batch, y_batch):
         '''Completely process a single mini-batch of data during training. This includes:
         1. Performing a forward pass of the data through the entire network.
@@ -241,7 +241,7 @@ class RNN(network.DeepNetwork):
         self.opt.apply_gradients(zip(grads, self.all_net_params))
         return loss
 
-    @tf.function(jit_compile=True)
+    @tf.function
     def test_step(self, x_batch, y_batch):
         '''Completely process a single mini-batch of data during test/validation time. This includes:
         1. Performing a forward pass of the data through the entire network.
