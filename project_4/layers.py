@@ -229,6 +229,15 @@ class Layer:
 
         return params
 
+    def save_wts(self):
+        '''Returns a dict of weights and bias as NumPy arrays for saving to disk.'''
+        return {'wts': self.wts.numpy(), 'b': self.bias.numpy()}
+
+    def load_wts(self, params):
+        '''Restores weights and bias from a dict of NumPy arrays.'''
+        self.wts.assign(params['wts'])
+        self.bias.assign(params['b'])
+
     def get_kaiming_gain(self):
         '''Returns the Kaiming gain that is appropriate for the current layer's activation function.
 

@@ -232,13 +232,13 @@ class RNN(network.DeepNetwork):
         # mask shape: (B, T) -> (B, T, 1) for compatibility with (B, T, H) in rec layers
         mask = tf.expand_dims(tf.cast(x_batch != self.pad_int, dtype=tf.float32), axis=-1)
 
-        # Do forward pass with gradients tracked in the tape
         with tf.GradientTape() as tape:
             net_act, _ = self(x=x_batch, mask=mask)
             loss = self.loss(net_act, y_batch, mask)
 
-        # Do wt update
-        self.update_params(tape, loss)
+        grads = tape.gradient(loss, self.all_net_params)
+        grads, _ = tf.clip_by_global_norm(grads, 1.0)
+        self.opt.apply_gradients(zip(grads, self.all_net_params))
         return loss
 
     @tf.function

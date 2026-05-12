@@ -3,6 +3,7 @@ Deep neural network core functionality implemented with the low-level TensorFlow
 Ariel Pan, Daniel Lyu
 CS 443: Bio-Inspired Learning
 '''
+import os
 import time
 import numpy as np
 import tensorflow as tf
@@ -311,8 +312,38 @@ class DeepNetwork:
         acc = self.accuracy(y_batch, y_pred)
         return float(acc), float(loss)
 
+    def save_wts(self, path='export', filename='params.npz'):
+        '''Saves all trainable weights and biases to disk.'''
+        full_path = os.path.join(path, filename)
+        os.makedirs(path, exist_ok=True)
+        params = {}
+        layer = self.output_layer
+        while layer is not None:
+            if layer.has_wts():
+                layer_params = layer.save_wts()
+                for param_name, value in layer_params.items():
+                    params[layer.get_name() + '/' + param_name] = value
+            layer = layer.get_prev_layer_or_block()
+        np.savez_compressed(full_path, **params)
+
+    def load_wts(self, path='export', filename='params.npz'):
+        '''Loads weights and biases from disk into each layer.'''
+        full_path = os.path.join(path, filename)
+        params = dict(np.load(full_path))
+        layer = self.output_layer
+        while layer is not None:
+            if layer.has_wts():
+                curr_layer_params = {}
+                for param_name in params:
+                    if layer.get_name() + '/' in param_name:
+                        key = param_name.split('/')[-1]
+                        curr_layer_params[key] = params[param_name]
+                layer.load_wts(curr_layer_params)
+            layer = layer.get_prev_layer_or_block()
+
     def fit(self, x, y, x_val=None, y_val=None, batch_size=128, max_epochs=10000, val_every=1, print_every=10,
-            verbose=True, patience=999, lr_patience=999, lr_decay_factor=0.5, lr_max_decays=12):
+            verbose=True, patience=999, lr_patience=999, lr_decay_factor=0.5, lr_max_decays=12,
+            checkpoint_dir=None, checkpoint_every=1):
         '''Trains the neural network on the training samples `x` (and associated int-coded labels `y`).
 
         Parameters:
@@ -386,7 +417,6 @@ class DeepNetwork:
         Be sure to bring the network layers back into training mode after you are doing computing val acc+loss.
         - There should be zero print outs when verbose is set to False.
         '''
-        # Define loss tracking containers
         train_loss_hist = []
         val_loss_hist = []
         val_acc_hist = []
@@ -399,9 +429,29 @@ class DeepNetwork:
         rencent_val_losses = []
         recent_val_losses_lr = []
         lr_decays = 0
-        e = 0 # epoch used
+        e = 0
+        start_epoch = 0
 
-        for epoch in range(max_epochs):
+        # Resume from checkpoint if one exists
+        if checkpoint_dir is not None:
+            ckpt_meta = os.path.join(checkpoint_dir, 'checkpoint_meta.npz')
+            ckpt_wts = os.path.join(checkpoint_dir, 'checkpoint_weights.npz')
+            if os.path.exists(ckpt_meta) and os.path.exists(ckpt_wts):
+                meta = dict(np.load(ckpt_meta, allow_pickle=True))
+                train_loss_hist = list(meta['train_loss_hist'])
+                val_loss_hist = list(meta['val_loss_hist'])
+                val_acc_hist = list(meta['val_acc_hist'])
+                start_epoch = int(meta['epoch'])
+                rencent_val_losses = list(meta['recent_val_losses'])
+                recent_val_losses_lr = list(meta['recent_val_losses_lr'])
+                lr_decays = int(meta['lr_decays'])
+                if 'current_lr' in meta:
+                    self.opt.learning_rate = float(meta['current_lr'])
+                self.load_wts(path=checkpoint_dir, filename='checkpoint_weights.npz')
+                if verbose:
+                    print(f'Resumed from checkpoint at epoch {start_epoch}/{max_epochs}')
+
+        for epoch in range(start_epoch, max_epochs):
             start_time = time.time()
             e = epoch + 1
             epoch_loss = 0.0
@@ -446,8 +496,18 @@ class DeepNetwork:
             if verbose:
                 print()
 
-
-
+            # Periodic checkpoint save
+            if checkpoint_dir is not None and e % checkpoint_every == 0:
+                self.save_wts(path=checkpoint_dir, filename='checkpoint_weights.npz')
+                np.savez(os.path.join(checkpoint_dir, 'checkpoint_meta.npz'),
+                         train_loss_hist=train_loss_hist,
+                         val_loss_hist=val_loss_hist,
+                         val_acc_hist=val_acc_hist,
+                         epoch=e,
+                         recent_val_losses=rencent_val_losses,
+                         recent_val_losses_lr=recent_val_losses_lr,
+                         lr_decays=lr_decays,
+                         current_lr=float(self.opt.learning_rate))
 
 
 
