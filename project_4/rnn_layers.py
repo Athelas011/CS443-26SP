@@ -1,6 +1,6 @@
 '''rnn_layers.py
 New layers specific to the RNN network
-Daniel Lyu
+Daniel Lyu, Yilin Pan
 CS 443: Bio-inspired Machine Learning
 Project 4: Recurrent Neural Networks
 '''
